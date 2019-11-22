@@ -1,0 +1,108 @@
+#!/usr/bin/env lua
+
+local argparse = require "argparse"
+local dump = require "shiplog.utils".dump
+
+local function parseEntryFilter(parts)
+    local tags = {}
+    local excludedTags = {}
+    local attributes = {}
+    local title = ""
+
+    for _, part in ipairs(parts) do
+        local prefix = part:sub(1, 1)
+
+        if prefix == "+" then
+            table.insert(tags, part:sub(2))
+        -- TODO: find a way for argparse to let us use '-'
+        elseif prefix == ":" then
+            table.insert(excludedTags, part:sub(2))
+        else
+            local key, value = part:match("^([^:]+):(.*)")
+
+            if key and value then
+                attributes[key] = value
+            else
+                title = title .. (title:len() > 0 and " " or "") .. part
+            end
+        end
+    end
+
+    return {
+        title = title,
+        tags = tags,
+        excludedTags = excludedTags,
+        attributes = attributes,
+    }
+end
+
+-- Parse command line
+local parser = argparse()
+    :name "shiplog"
+    :description "⚓ A journal keeping cli tool"
+    :require_command(false)
+    :command_target("command")
+
+local addCommand = parser:command "add a"
+addCommand:description "Write a log entry"
+
+addCommand
+    :argument "entry"
+    :description "The entry"
+    :args "*" -- If not given, should come from stdin
+
+addCommand:flag "--editor -e"
+    :description "Opens default editor ($EDITOR) to write the entry"
+
+addCommand:option "--file -f"
+    :description "Use file content as entry"
+    :args(1)
+
+local updateCommand = parser:command "update u"
+updateCommand:description "Update a log entry"
+
+updateCommand
+    :argument "entry"
+    :description "Entry ID"
+    :args(1)
+
+local deleteCommand = parser:command "delete del d"
+deleteCommand:description "Delete an entry"
+
+deleteCommand
+    :argument "entry"
+    :description "Entry ID"
+    :args(1)
+
+local listCommand = parser:command "list ls l"
+listCommand:description "List log entries"
+
+listCommand
+    :argument "filter"
+    :description "Filter entries"
+    :args "*"
+
+listCommand
+    :option "--limit -n"
+    :description "Limit number of printed entries"
+
+listCommand
+    :flag "--short -s"
+    :description "Short entries (date and title)"
+
+local args = parser:parse()
+
+-- Route
+dump(args)
+
+if args.command == "add" then
+    local entry = parseEntryFilter(args.filter)
+
+    dump(entry)
+elseif args.command == "update" then
+elseif args.command == "edit" then
+elseif args.command == "list" then
+    local filter = parseEntryFilter(args.filter)
+
+    dump(filter)
+end
