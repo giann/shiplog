@@ -1,0 +1,3 @@
+return {
+    db = "./log.db",
+}

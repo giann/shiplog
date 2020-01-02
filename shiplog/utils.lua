@@ -1,5 +1,19 @@
 local colors = require "term".colors
 
+local function fileToString(filename)
+    local file, _ = io.open(filename, "r")
+
+    if not file then
+        return nil
+    end
+
+    local str = file:read("*all")
+
+    file:close()
+
+    return str
+end
+
 local dump
 dump = function(t, inc, seen)
     if type(t) == "table" and (inc or 0) < 5 then
@@ -80,5 +94,6 @@ dump = function(t, inc, seen)
 end
 
 return {
+    fileToString = fileToString,
     dump = dump
 }

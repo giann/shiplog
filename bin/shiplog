@@ -1,13 +1,20 @@
 #!/usr/bin/env lua
 
 local argparse = require "argparse"
-local dump = require "shiplog.utils".dump
+local utils    = require "shiplog.utils"
+local log      = require "shiplog.logging"
+local config   = require "shiplog.config"
+local shiplog  = require "shiplog"
+local term     = require "term"
+
+local env = require "luasql.sqlite3".sqlite3()
+local conn = assert(env:connect(config.db), "Could not connect to knowledge db")
 
 local function parseEntryFilter(parts)
     local tags = {}
     local excludedTags = {}
     local attributes = {}
-    local title = ""
+    local content = ""
 
     for _, part in ipairs(parts) do
         local prefix = part:sub(1, 1)
@@ -23,17 +30,43 @@ local function parseEntryFilter(parts)
             if key and value then
                 attributes[key] = value
             else
-                title = title .. (title:len() > 0 and " " or "") .. part
+                content = content .. (content:len() > 0 and " " or "") .. part
             end
         end
     end
 
     return {
-        title = title,
+        content = content,
         tags = tags,
         excludedTags = excludedTags,
         attributes = attributes,
     }
+end
+
+local function getEntry(args)
+    local entry = args.entry or args.filter
+
+    -- Get entry from editor
+    if args.editor then
+        local tmpFile = os.tmpname()
+
+        -- Open tmp file with default editor
+        if os.execute("$EDITOR " .. tmpFile) then
+            -- Read tmp file
+            entry = utils.fileToString(tmpFile)
+
+            -- Remove tmp file
+            os.remove(tmpFile)
+        end
+    -- Get entry from file
+    elseif args.file then
+        entry = utils.fileToString(args.file)
+    -- Get entry from stdin
+    elseif not entry and not term.isatty(io.stdin) then
+        entry = io.stdin:read("a")
+    end
+
+    return entry
 end
 
 -- Parse command line
@@ -58,19 +91,24 @@ addCommand:option "--file -f"
     :description "Use file content as entry"
     :args(1)
 
-local updateCommand = parser:command "update u"
-updateCommand:description "Update a log entry"
+local modifyCommand = parser:command "modify mod m"
+modifyCommand:description "Modify a log entry"
 
-updateCommand
-    :argument "entry"
+modifyCommand
+    :argument "id"
     :description "Entry ID"
     :args(1)
+
+modifyCommand
+    :argument "entry"
+    :description "Modifications"
+    :args "*"
 
 local deleteCommand = parser:command "delete del d"
 deleteCommand:description "Delete an entry"
 
 deleteCommand
-    :argument "entry"
+    :argument "id"
     :description "Entry ID"
     :args(1)
 
@@ -92,17 +130,26 @@ listCommand
 
 local args = parser:parse()
 
--- Route
-dump(args)
-
 if args.command == "add" then
-    local entry = parseEntryFilter(args.filter)
+    local ok, err = shiplog.add(conn, parseEntryFilter(getEntry(args)))
 
-    dump(entry)
-elseif args.command == "update" then
-elseif args.command == "edit" then
+    if not ok then
+        log.failure("Could not create entry: " .. err)
+    else
+        log.success("Entry created")
+    end
+elseif args.command == "modify" then
+    shiplog.modify(conn, args.id, parseEntryFilter(getEntry(args)))
+elseif args.command == "delete" then
+    local ok, err = shiplog.delete(conn, args.id)
+
+    if not ok then
+        log.failure(err)
+    else
+        log.success("Entry deleted")
+    end
 elseif args.command == "list" then
-    local filter = parseEntryFilter(args.filter)
-
-    dump(filter)
+    shiplog.list(parseEntryFilter(getEntry(args)))
 end
+
+conn:close()
