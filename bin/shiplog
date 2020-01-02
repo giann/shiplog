@@ -139,7 +139,13 @@ if args.command == "add" then
         log.success("Entry created")
     end
 elseif args.command == "modify" then
-    shiplog.modify(conn, args.id, parseEntryFilter(getEntry(args)))
+    local ok, err = shiplog.modify(conn, args.id, parseEntryFilter(getEntry(args)))
+
+    if not ok then
+        log.failure(err)
+    else
+        log.success("Entry deleted")
+    end
 elseif args.command == "delete" then
     local ok, err = shiplog.delete(conn, args.id)
 
@@ -149,7 +155,7 @@ elseif args.command == "delete" then
         log.success("Entry deleted")
     end
 elseif args.command == "list" then
-    shiplog.list(parseEntryFilter(getEntry(args)))
+    shiplog.list(conn, parseEntryFilter(getEntry(args)), args.limit)
 end
 
 conn:close()

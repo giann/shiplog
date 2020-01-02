@@ -93,7 +93,18 @@ dump = function(t, inc, seen)
     io.write(colors.yellow .. tostring(t) .. colors.reset)
 end
 
+local function contains(hay, needle)
+    for _, v in pairs(hay) do
+        if v == needle then
+            return true
+        end
+    end
+
+    return false
+end
+
 return {
     fileToString = fileToString,
-    dump = dump
+    dump = dump,
+    contains = contains,
 }

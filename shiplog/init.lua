@@ -1,4 +1,5 @@
-local dump = require "shiplog.utils".dump
+local utils = require "shiplog.utils"
+local colors = require "term".colors
 
 local function rows(connection, statement)
     local cursor = assert(
@@ -8,7 +9,7 @@ local function rows(connection, statement)
 
     return function ()
         return cursor:fetch()
-    end
+    end, cursor
 end
 
 local function first_row(connection, statement)
@@ -17,7 +18,7 @@ local function first_row(connection, statement)
         "Could not execute statement `" .. statement .. "`"
     )
 
-    return cursor:fetch()
+    return cursor:fetch(), cursor
 end
 
 local function add(conn, entry)
@@ -58,7 +59,7 @@ local function add(conn, entry)
 end
 
 local function modify(conn, id, entry)
-    id = conn:escape(id)
+    return true
 end
 
 local function delete(conn, id)
@@ -71,12 +72,92 @@ local function delete(conn, id)
         (not affected or affected == 0) and "Could not find entry with id `" .. id .. "`"
 end
 
-local function list(conn, filter)
+local function list(conn, filter, limit)
+    for i, tag in ipairs(filter.tags) do
+        filter.tags[i] = conn:escape(tag)
+    end
+
+    for i, tag in ipairs(filter.excludedTags) do
+        filter.excludedTags[i] = conn:escape(tag)
+    end
+
+    for k, v in pairs(filter.attributes) do
+        filter.attributes[k] = conn:escape(v)
+    end
+
+    local tags =
+        #filter.tags > 0
+            and "'" .. table.concat(filter.tags, "', '") .. "'"
+            or nil
+
+    local statement = "select distinct entries.rowid as id, created_at, updated_at, content, location "
+        .. "from entries_tags, entries "
+        .. "where entries_tags.entry_id = entries.rowid "
+        .. (tags and " and tag in (" .. tags .. ")" or "")
+        -- TODO: attr
+        .. (limit and " limit " .. conn:escape(limit) or "")
+
+    local result = {}
+    local iterator, cursor = rows(conn, statement)
+    for id, created_at, updated_at, content, location in iterator do
+        local entry = {
+            id = id,
+            content = content,
+            location = location,
+            entryTags = {},
+            created_at = created_at,
+            updated_at = updated_at,
+        }
+
+        local excluded = false
+        local iterator2, cursor2 =
+            rows(conn, "select tag from entries_tags where entry_id = '" .. id .. "'")
+        for tag in iterator2 do
+            table.insert(entry.entryTags, tag)
+
+            if filter.excludedTags and #filter.excludedTags > 0
+                and utils.contains(filter.excludedTags, tag) then
+                excluded = true
+                break
+            end
+        end
+        cursor2:close()
+
+        if not excluded then
+            result[id] = entry
+        end
+    end
+    cursor:close()
+
+    return result
+end
+
+local function prettyList(conn, filter, limit)
+    local results = list(conn, filter, limit)
+
+    -- TODO: order by desc date
+    for _, entry in pairs(results) do
+        local line = entry.content:match("^([^\n]+)") or entry.content:sub(1, 80)
+
+        local tags = entry.entryTags
+        for i, tag in ipairs(tags) do
+            -- TODO: color based on first 3 chars
+            tags[i] = "+" .. tag
+        end
+
+        print(
+            "\n"
+            .. colors.dim(entry.updated_at or entry.created_at) .. " "
+            .. line
+            .. "\n"
+            .. colors.green(table.concat(tags, " "))
+        )
+    end
 end
 
 return {
     add = add,
     modify = modify,
     delete = delete,
-    list = list
+    list = prettyList
 }
