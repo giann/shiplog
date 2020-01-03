@@ -6,6 +6,7 @@ local log      = require "shiplog.logging"
 local config   = require "shiplog.config"
 local shiplog  = require "shiplog"
 local term     = require "term"
+local colors   = term.colors
 
 local env = require "luasql.sqlite3".sqlite3()
 local conn = assert(env:connect(config.db), "Could not connect to knowledge db")
@@ -140,12 +141,12 @@ if args.command == "add" then
     local entry = getEntry(args)
 
     if entry then
-        local ok, err = shiplog.add(conn, parseEntryFilter(entry))
+        local ok, errOrId = shiplog.add(conn, parseEntryFilter(entry))
 
         if not ok then
-            log.failure("Could not create entry: " .. err)
+            log.failure("Could not create entry: " .. errOrId)
         else
-            log.success("Entry created")
+            log.success("Entry " .. colors.blue("#" .. errOrId) .. colors.green(" created"))
         end
     else
         log.failure "Missing entry"

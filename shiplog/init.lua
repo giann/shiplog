@@ -65,7 +65,10 @@ local function add(conn, entry)
         end
     end
 
-    return true
+    local cur, id = first_row(conn, "select last_insert_rowid()")
+    cur:close()
+
+    return true, id
 end
 
 local function modify(conn, id, entry)
