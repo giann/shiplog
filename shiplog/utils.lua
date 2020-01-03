@@ -144,9 +144,14 @@ local function split(self, delim, maxNb)
     return result
 end
 
+local function trim(s)
+    return s:match "^%s*(.-)%s*$"
+end
+
 return {
     fileToString = fileToString,
     dump         = dump,
     contains     = contains,
     split        = split,
+    trim         = trim
 }

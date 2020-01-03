@@ -18,7 +18,7 @@ local function first_row(connection, statement)
         "Could not execute statement `" .. statement .. "`"
     )
 
-    return cursor:fetch(), cursor
+    return cursor, cursor:fetch()
 end
 
 -- TODO: choose from palette instead of using actual values
@@ -216,7 +216,7 @@ local function prettyList(conn, filter, limit)
         print(
             "\n"
             .. colors.cyan("#" .. entry.id .. " ")
-            .. line
+            .. colors.green(line)
             .. "\n"
             .. colors.dim(entry.updated_at or entry.created_at) .. " "
             .. table.concat(tags, " ")
@@ -224,9 +224,43 @@ local function prettyList(conn, filter, limit)
     end
 end
 
+local function view(conn, id)
+    local cursor, createdAt, updatedAt, content, _ = first_row(
+        conn,
+        "select created_at, updated_at, content, location "
+        .. "from entries "
+        .. "where rowid = '" .. conn:escape(id) .. "'"
+    )
+    cursor:close()
+
+    local line = (content:match("^([^\n]+)") or content)
+        :sub(1, 80)
+
+    local tags = {}
+
+    local it, cur =
+        rows(conn, "select tag from entries_tags where entry_id = '" .. id .. "'")
+    for tag in it do
+        table.insert(tags, coloredTag("+" .. tag))
+    end
+    cur:close()
+
+    print(
+        "\n"
+        .. colors.cyan("#" .. id .. " ")
+        .. colors.green(line)
+        .. "\n"
+        .. colors.dim(updatedAt or createdAt) .. " "
+        .. table.concat(tags, " ")
+    )
+
+    print("\n" .. utils.trim(content:sub(line:len() + 1)))
+end
+
 return {
-    add = add,
+    add    = add,
     modify = modify,
     delete = delete,
-    list = prettyList
+    list   = prettyList,
+    view   = view
 }

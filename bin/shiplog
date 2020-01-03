@@ -127,6 +127,13 @@ listCommand
     :flag "--short -s"
     :description "Short entries (date and title)"
 
+local viewCommand = parser:command "view v"
+viewCommand:description "View an entry"
+
+viewCommand:argument "id"
+    :description "Entry ID"
+    :args(1)
+
 local args = parser:parse()
 
 if args.command == "add" then
@@ -167,6 +174,8 @@ elseif args.command == "delete" then
     end
 elseif args.command == "list" then
     shiplog.list(conn, parseEntryFilter(getEntry(args, true)), args.limit)
+elseif args.command == "view" then
+    shiplog.view(conn, args.id)
 end
 
 conn:close()
