@@ -21,6 +21,7 @@ local function first_row(connection, statement)
     return cursor:fetch(), cursor
 end
 
+-- TODO: choose from palette instead of using actual values
 local function coloredTag(tag)
     local a = ("a"):byte(1)
     local r = math.floor(((tag:lower():byte(2) - a) / 26) * 255)
@@ -52,7 +53,7 @@ local function add(conn, entry)
         assert(tag:len() >= 3, "Tag must be at least 3 characters long")
 
         statement =
-            "insert into entries_tags (entry_id, tag) values ("
+            "replace into entries_tags (entry_id, tag) values ("
                 .. "last_insert_rowid(),"
                 .. "'" .. conn:escape(tag) .. "'"
             .. ")"
@@ -68,6 +69,57 @@ local function add(conn, entry)
 end
 
 local function modify(conn, id, entry)
+    -- Check for entry existence
+    local exist = false
+    local it, cur =
+        rows(conn, "select count(*) from entries where rowid = '" .. conn:escape(id) .. "'")
+    for count in it do
+        if count > 0 then
+            exist = true
+            break
+        end
+    end
+    cur:close()
+
+    if not exist then
+        return false, "Could not find entry with id `" .. id .. "`"
+    end
+
+    -- TODO: attributes
+    if entry.content and entry.content:len() > 0 then
+        if conn:execute(
+            "update entries set content = '" .. conn:escape(entry.content) .. "' "
+            .. "where entries.rowid = '" .. conn:escape(id) .. "'"
+        ) == 0 then
+            return false, "Could not modify entry with id `" .. id .. "`"
+        end
+    end
+
+    for _, tag in ipairs(entry.tags) do
+        assert(tag:len() >= 3, "Tag must be at least 3 characters long")
+
+        local statement =
+            "replace into entries_tags (entry_id, tag) values ("
+                .. conn:escape(id) .. ","
+                .. "'" .. conn:escape(tag) .. "'"
+            .. ")"
+
+        local ok, err = conn:execute(statement)
+
+        if not ok then
+            return ok, err
+        end
+    end
+
+    for _, tag in ipairs(entry.excludedTags) do
+        if conn:execute(
+            "delete from entries_tags where entry_id = '" .. conn:escape(id) .. "' "
+            .. " and entry.tag = '" .. tag .. "'"
+        ) == 0 then
+            return false, "Could not modify entry with id `" .. id .. "`"
+        end
+    end
+
     return true
 end
 
@@ -78,10 +130,13 @@ local function delete(conn, id)
     affected = affected + conn:execute("delete from entries_tags where rowid = '" .. id .. "';")
 
     return affected and affected > 0,
-        (not affected or affected == 0) and "Could not find entry with id `" .. id .. "`"
+        (not affected or affected == 0) and "Could not modify entry with id `" .. id .. "`"
 end
 
 local function list(conn, filter, limit)
+    filter = filter or {} -- Filter can be empty
+    limit = limit or 10
+
     for i, tag in ipairs(filter.tags) do
         filter.tags[i] = conn:escape(tag)
     end
@@ -101,10 +156,10 @@ local function list(conn, filter, limit)
 
     local statement = "select distinct entries.rowid as id, created_at, updated_at, content, location "
         .. "from entries_tags, entries "
-        .. "where entries_tags.entry_id = entries.rowid "
-        .. (tags and " and tag in (" .. tags .. ")" or "")
+        .. (tags and "where entries_tags.entry_id = entries.rowid "
+            .. " and tag in (" .. tags .. ") " or "")
         -- TODO: attr
-        .. (limit and " limit " .. conn:escape(limit) or "")
+        .. "limit " .. conn:escape(limit)
 
     local result = {}
     local iterator, cursor = rows(conn, statement)
@@ -151,7 +206,7 @@ local function prettyList(conn, filter, limit)
 
     for _, entry in pairs(results) do
         local line = (entry.content:match("^([^\n]+)") or entry.content)
-            :sub(1, 80 - entry.created_at:len())
+            :sub(1, 80)
 
         local tags = entry.entryTags
         for i, tag in ipairs(tags) do
@@ -160,9 +215,10 @@ local function prettyList(conn, filter, limit)
 
         print(
             "\n"
-            .. colors.dim(entry.updated_at or entry.created_at) .. " "
+            .. colors.cyan("#" .. entry.id .. " ")
             .. line
             .. "\n"
+            .. colors.dim(entry.updated_at or entry.created_at) .. " "
             .. table.concat(tags, " ")
         )
     end

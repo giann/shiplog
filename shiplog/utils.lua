@@ -103,8 +103,50 @@ local function contains(hay, needle)
     return false
 end
 
+local splitCache = {}
+
+local function split(self, delim, maxNb)
+    local cache = splitCache[self] and splitCache[self][delim]
+    if cache then
+        return cache
+    end
+
+    if string.find(self, delim) == nil then
+        return { self }
+    end
+    local result = {}
+    if delim == '' or not delim then
+        for i=1,#self do
+            result[i]=self:sub(i,i)
+        end
+        return result
+    end
+    if maxNb == nil or maxNb < 1 then
+        maxNb = 0
+    end
+    local pat = "(.-)" .. delim .. "()"
+    local nb = 0
+    local lastPos
+    for part, pos in string.gmatch(self, pat) do
+        nb = nb + 1
+        result[nb] = part
+        lastPos = pos
+        if nb == maxNb then break end
+    end
+
+    if nb ~= maxNb then
+        result[nb + 1] = string.sub(self, lastPos)
+    end
+
+    splitCache[self] = splitCache[self] or {}
+    splitCache[self][delim] = result
+
+    return result
+end
+
 return {
     fileToString = fileToString,
     dump         = dump,
     contains     = contains,
+    split        = split,
 }

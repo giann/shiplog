@@ -43,30 +43,32 @@ local function parseEntryFilter(parts)
     }
 end
 
-local function getEntry(args)
+local function getEntry(args, canBeEmpty)
     local entry = args.entry or args.filter
 
-    -- Get entry from editor
-    if args.editor then
-        local tmpFile = os.tmpname()
-
-        -- Open tmp file with default editor
-        if os.execute("$EDITOR " .. tmpFile) then
-            -- Read tmp file
-            entry = utils.fileToString(tmpFile)
-
-            -- Remove tmp file
-            os.remove(tmpFile)
-        end
     -- Get entry from file
-    elseif args.file then
+    if args.file then
         entry = utils.fileToString(args.file)
-    -- Get entry from stdin
-    elseif not entry and not term.isatty(io.stdin) then
-        entry = io.stdin:read("a")
+    elseif not entry or #entry == 0 and not canBeEmpty then
+        if not term.isatty(io.stdin) then
+            -- Get entry from stdin
+            entry = io.stdin:read("a")
+        else
+            -- Get entry from editor
+            local tmpFile = os.tmpname()
+
+            -- Open tmp file with default editor
+            if os.execute("$EDITOR " .. tmpFile) then
+                -- Read tmp file
+                entry = utils.split(utils.fileToString(tmpFile), " ")
+
+                -- Remove tmp file
+                os.remove(tmpFile)
+            end
+        end
     end
 
-    return entry
+    return entry and #entry > 0 and entry or (canBeEmpty and {} or nil)
 end
 
 -- Parse command line
@@ -83,9 +85,6 @@ addCommand
     :argument "entry"
     :description "The entry"
     :args "*" -- If not given, should come from stdin
-
-addCommand:flag "--editor -e"
-    :description "Opens default editor ($EDITOR) to write the entry"
 
 addCommand:option "--file -f"
     :description "Use file content as entry"
@@ -131,20 +130,32 @@ listCommand
 local args = parser:parse()
 
 if args.command == "add" then
-    local ok, err = shiplog.add(conn, parseEntryFilter(getEntry(args)))
+    local entry = getEntry(args)
 
-    if not ok then
-        log.failure("Could not create entry: " .. err)
+    if entry then
+        local ok, err = shiplog.add(conn, parseEntryFilter(entry))
+
+        if not ok then
+            log.failure("Could not create entry: " .. err)
+        else
+            log.success("Entry created")
+        end
     else
-        log.success("Entry created")
+        log.failure "Missing entry"
     end
 elseif args.command == "modify" then
-    local ok, err = shiplog.modify(conn, args.id, parseEntryFilter(getEntry(args)))
+    local entry = getEntry(args)
 
-    if not ok then
-        log.failure(err)
+    if entry then
+        local ok, err = shiplog.modify(conn, args.id, parseEntryFilter(entry))
+
+        if not ok then
+            log.failure(err)
+        else
+            log.success("Entry modified")
+        end
     else
-        log.success("Entry deleted")
+        log.failure "Missing entry"
     end
 elseif args.command == "delete" then
     local ok, err = shiplog.delete(conn, args.id)
@@ -155,7 +166,7 @@ elseif args.command == "delete" then
         log.success("Entry deleted")
     end
 elseif args.command == "list" then
-    shiplog.list(conn, parseEntryFilter(getEntry(args)), args.limit)
+    shiplog.list(conn, parseEntryFilter(getEntry(args, true)), args.limit)
 end
 
 conn:close()
