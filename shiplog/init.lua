@@ -21,6 +21,15 @@ local function first_row(connection, statement)
     return cursor:fetch(), cursor
 end
 
+local function coloredTag(tag)
+    local a = ("a"):byte(1)
+    local r = math.floor(((tag:lower():byte(2) - a) / 26) * 255)
+    local g = math.floor(((tag:lower():byte(3) - a) / 26) * 255)
+    local b = math.floor(((tag:lower():byte(4) - a) / 26) * 255)
+
+    return "\27[38;2;" .. r .. ";" .. g .. ";" .. b .. "m" .. tag .. "\27[0m"
+end
+
 local function add(conn, entry)
     local location = entry.attributes.location
 
@@ -124,10 +133,15 @@ local function list(conn, filter, limit)
         cursor2:close()
 
         if not excluded then
-            result[id] = entry
+            table.insert(result, entry)
         end
     end
     cursor:close()
+
+    -- Sort by desc date
+    table.sort(result, function(r1, r2)
+        return r1.created_at > r2.created_at
+    end)
 
     return result
 end
@@ -135,14 +149,13 @@ end
 local function prettyList(conn, filter, limit)
     local results = list(conn, filter, limit)
 
-    -- TODO: order by desc date
     for _, entry in pairs(results) do
-        local line = entry.content:match("^([^\n]+)") or entry.content:sub(1, 80)
+        local line = (entry.content:match("^([^\n]+)") or entry.content)
+            :sub(1, 80 - entry.created_at:len())
 
         local tags = entry.entryTags
         for i, tag in ipairs(tags) do
-            -- TODO: color based on first 3 chars
-            tags[i] = "+" .. tag
+            tags[i] = coloredTag("+" .. tag)
         end
 
         print(
@@ -150,7 +163,7 @@ local function prettyList(conn, filter, limit)
             .. colors.dim(entry.updated_at or entry.created_at) .. " "
             .. line
             .. "\n"
-            .. colors.green(table.concat(tags, " "))
+            .. table.concat(tags, " ")
         )
     end
 end

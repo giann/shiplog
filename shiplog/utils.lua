@@ -105,6 +105,6 @@ end
 
 return {
     fileToString = fileToString,
-    dump = dump,
-    contains = contains,
+    dump         = dump,
+    contains     = contains,
 }
