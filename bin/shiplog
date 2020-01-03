@@ -130,10 +130,16 @@ listCommand
 listCommand
     :option "--limit -n"
     :description "Limit number of printed entries"
+    :args(1)
 
 listCommand
     :flag "--short -s"
     :description "Short entries (date and title)"
+
+listCommand
+    :option "--before -b"
+    :description "Only show entry created before this date"
+    :args(1)
 
 local viewCommand = parser:command "view v"
 viewCommand:description "View an entry"
@@ -181,7 +187,13 @@ elseif args.command == "delete" then
         log.success("Entry deleted")
     end
 elseif args.command == "list" then
-    shiplog.list(conn, parseEntryFilter(getEntry(args, true)), args.limit)
+    -- TODO: table with criteria
+    shiplog.list(
+        conn,
+        parseEntryFilter(getEntry(args, true)),
+        args.limit,
+        args.before
+    )
 elseif args.command == "view" then
     shiplog.view(conn, args.id)
 end

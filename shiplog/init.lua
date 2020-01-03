@@ -138,7 +138,14 @@ local function delete(conn, id)
         (not affected or affected == 0) and "Could not modify entry with id `" .. id .. "`"
 end
 
-local function list(conn, filter, limit)
+local function list(conn, filter, limit, before)
+    assert(
+        not before
+        or before:match "^%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d$"
+        or before:match "^%d%d%d%d%-%d%d%-%d%d$",
+        "Bad date format, expected date of form: `YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`"
+    )
+
     filter = filter or {} -- Filter can be empty
     limit = limit or 10
 
@@ -159,10 +166,24 @@ local function list(conn, filter, limit)
             and "'" .. table.concat(filter.tags, "', '") .. "'"
             or nil
 
+    local tagsCondition = tags
+        and " entries_tags.entry_id = entries.rowid "
+            .. " and tag in (" .. tags .. ") "
+        or ""
+
+    local beforeCondition = before
+        and (" created_at < datetime('" .. conn:escape(before) .. "') ")
+        or ""
+
+    if tagsCondition:len() > 0 and beforeCondition:len() > 0 then
+        beforeCondition = " and" .. beforeCondition
+    end
+
     local statement = "select distinct entries.rowid as id, created_at, updated_at, content, location "
         .. "from entries_tags, entries "
-        .. (tags and "where entries_tags.entry_id = entries.rowid "
-            .. " and tag in (" .. tags .. ") " or "")
+        .. ((tagsCondition:len() > 0 or beforeCondition:len() > 0) and " where " or "")
+        .. tagsCondition
+        .. beforeCondition
         -- TODO: attr
         .. "limit " .. conn:escape(limit)
 
@@ -206,8 +227,8 @@ local function list(conn, filter, limit)
     return result
 end
 
-local function prettyList(conn, filter, limit)
-    local results = list(conn, filter, limit)
+local function prettyList(conn, filter, limit, before)
+    local results = list(conn, filter, limit, before)
 
     for _, entry in pairs(results) do
         local line = (entry.content:match("^([^\n]+)") or entry.content)
