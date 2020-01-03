@@ -15,6 +15,10 @@ description = {
 
 build = {
     modules = {
+        ["shiplog"]         = "shiplog/init.lua",
+        ["shiplog.config"]  = "shiplog/config.lua",
+        ["shiplog.logging"] = "shiplog/logging.lua",
+        ["shiplog.utils"]   = "shiplog/utils.lua",
     },
     type = "builtin",
     install = {
@@ -27,10 +31,7 @@ build = {
 dependencies = {
     "lua >= 5.3",
     "sirocco >= 0.0.1-5",
-    "hump >= 0.4-2",
-    "lpeg >= 1.0.1-1",
     "argparse >= 0.6.0-1",
-    "compat53 >= 0.7-1",
     "lua-term >= 0.7-1",
     "luasql-sqlite3 >= 2.4.0-1",
 }

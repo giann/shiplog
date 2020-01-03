@@ -23,6 +23,7 @@ local function first_row(connection, statement)
 end
 
 -- TODO: choose from palette instead of using actual values
+-- TODO: handle non-true-color terminals
 local function coloredTag(tag)
     local a = ("a"):byte(1)
     local r = math.floor(((tag:lower():byte(2) - a) / 26) * 255)
