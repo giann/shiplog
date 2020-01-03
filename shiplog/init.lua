@@ -1,5 +1,6 @@
-local utils = require "shiplog.utils"
+local utils  = require "shiplog.utils"
 local colors = require "term".colors
+local log    = require "shiplog.logging"
 
 local function rows(connection, statement)
     local cursor = assert(
@@ -49,12 +50,15 @@ local function add(conn, entry)
         return ok, err
     end
 
+    local cur, id = first_row(conn, "select last_insert_rowid()")
+    cur:close()
+
     for _, tag in ipairs(entry.tags) do
         assert(tag:len() >= 3, "Tag must be at least 3 characters long")
 
         statement =
-            "replace into entries_tags (entry_id, tag) values ("
-                .. "last_insert_rowid(),"
+            "replace into entries_tags (entry_id, tag) values ('"
+                .. id .. "',"
                 .. "'" .. conn:escape(tag) .. "'"
             .. ")"
 
@@ -64,9 +68,6 @@ local function add(conn, entry)
             return ok, err
         end
     end
-
-    local cur, id = first_row(conn, "select last_insert_rowid()")
-    cur:close()
 
     return true, id
 end
@@ -236,6 +237,11 @@ local function view(conn, id)
     )
     cursor:close()
 
+    if not content then
+        log.failure("Could not find entry with id `" .. id .. "`")
+        return
+    end
+
     local line = (content:match("^([^\n]+)") or content)
         :sub(1, 80)
 
@@ -257,7 +263,11 @@ local function view(conn, id)
         .. table.concat(tags, " ")
     )
 
-    print("\n" .. utils.trim(content:sub(line:len() + 1)))
+    local body = utils.trim(content:sub(line:len() + 1))
+
+    if body:len() > 0 then
+        print("\n" .. body)
+    end
 end
 
 return {

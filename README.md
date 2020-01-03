@@ -1,6 +1,10 @@
 # ⚓ Shiplog
 A journal keeping cli tool
 
+<p align="center">
+    <img src="https://raw.githubusercontent.com/giann/shiplog/master/screen.png" alt="Shiplog">
+</p>
+
 - [X] Write log entries
 - [X] Tag entries
 - [ ] Interactive mode with sirocco

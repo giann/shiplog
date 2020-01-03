@@ -11,30 +11,36 @@ local colors   = term.colors
 local env = require "luasql.sqlite3".sqlite3()
 local conn = assert(env:connect(config.db), "Could not connect to knowledge db")
 
-local function parseEntryFilter(parts)
+local function parseEntryFilter(entry)
     local tags = {}
     local excludedTags = {}
     local attributes = {}
     local content = ""
 
-    for _, part in ipairs(parts) do
-        local prefix = part:sub(1, 1)
+    for _, line in ipairs(utils.split(entry, "\n")) do
+        for _, word in ipairs(utils.split(line, " ")) do
+            local trimmed = utils.trim(word)
+            local prefix = trimmed:sub(1, 1)
 
-        if prefix == "+" then
-            table.insert(tags, part:sub(2))
-        -- TODO: find a way for argparse to let us use '-'
-        elseif prefix == ":" then
-            table.insert(excludedTags, part:sub(2))
-        else
-            local key, value = part:match("^([^:]+):(.*)")
-
-            if key and value then
-                attributes[key] = value
+            if prefix == "+" then
+                table.insert(tags, trimmed:sub(2))
+            -- TODO: find a way for argparse to let us use '-'
+            elseif prefix == ":" then
+                table.insert(excludedTags, trimmed:sub(2))
             else
-                content = content .. (content:len() > 0 and " " or "") .. part
+                local key, value = trimmed:match("^([^:]+):(.*)")
+
+                if key and value then
+                    attributes[key] = value
+                else
+                    content = content .. word .. " "
+                end
             end
         end
+        content = content .. "\n"
     end
+
+    content = utils.trim(content)
 
     return {
         content = content,
@@ -61,22 +67,23 @@ local function getEntry(args, canBeEmpty)
             -- Open tmp file with default editor
             if os.execute("$EDITOR " .. tmpFile) then
                 -- Read tmp file
-                entry = utils.split(utils.fileToString(tmpFile), " ")
+                entry = utils.fileToString(tmpFile)
 
                 -- Remove tmp file
                 os.remove(tmpFile)
             end
         end
+    else
+        entry = table.concat(entry, " ")
     end
 
-    return entry and #entry > 0 and entry or (canBeEmpty and {} or nil)
+    return entry and entry:len() > 0 and entry or (canBeEmpty and "" or nil)
 end
 
 -- Parse command line
 local parser = argparse()
     :name "shiplog"
     :description "⚓ A journal keeping cli tool"
-    :require_command(false)
     :command_target("command")
 
 local addCommand = parser:command "add a"
