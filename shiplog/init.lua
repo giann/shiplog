@@ -132,11 +132,11 @@ end
 local function delete(conn, id)
     id = conn:escape(id)
 
-    local affected = conn:execute("delete from entries where rowid = " .. id .. ";")
-    affected = affected + conn:execute("delete from entries_tags where entry_id = " .. id .. ";")
+    local affected = conn:execute("delete from entries where rowid = " .. id)
+    affected = affected + conn:execute("delete from entries_tags where entry_id = " .. id)
 
     return affected and affected > 0,
-        (not affected or affected == 0) and "Could not modify entry with id `" .. id .. "`"
+        (not affected or affected == 0) and "Could not delete entry with id `" .. id .. "`"
 end
 
 local function list(conn, filter, limit, before)
@@ -302,6 +302,77 @@ local function view(conn, id)
     end
 end
 
+local function addAttribute(conn, name, attrType)
+    assert(
+        attrType == "text"
+        or attrType == "number"
+        or attrType == "boolean",
+        "type must be one of: text, number or boolean"
+    )
+
+    assert(name:match("%w+"), "name has to be alphanumeric")
+
+    local statement = "insert into attributes (name, type) values ("
+        .. "'" .. conn:escape(name) .. "', "
+        .. "'" .. conn:escape(attrType) .. "'"
+        .. ")"
+
+    local ok, err = conn:execute(statement)
+
+    if not ok then
+        return ok, err
+    end
+
+    local cur, id = first_row(conn, "select last_insert_rowid()")
+    cur:close()
+
+    return true, id
+end
+
+local function deleteAttribute(conn, id)
+    id = conn:escape(id)
+
+    local affected = conn:execute("delete from attributes where rowid = " .. id)
+
+    return affected and affected > 0,
+        (not affected or affected == 0) and "Could not delete attribute with id `" .. id .. "`"
+end
+
+local function modifyAttribute(conn, id, name, attrType)
+    assert(
+        attrType == "text"
+        or attrType == "number"
+        or attrType == "boolean",
+        "type must be one of: text, number or boolean"
+    )
+
+    assert(name:match("%w+"), "name has to be alphanumeric")
+
+    local statement = "update attributes "
+        .. "set name = '" .. conn:escape(name) .. "' "
+        .. ", type = '" .. conn:escape(attrType) .. "' "
+        .. "where rowid = " .. conn:escape(id)
+
+    if conn:execute(statement) ~= 1 then
+        return false, "Could not modify attribute with id `" .. id .. "`"
+    end
+
+    return true
+end
+
+local function listAttributes(conn)
+    local iterator, cursor = rows(conn, "select rowid, name, type from attributes")
+    print()
+    for id, name, attrType in iterator do
+        print(
+            colors.cyan("#" .. id .. " ")
+            .. colors.green(name)
+            .. ": " .. colors.magenta(attrType)
+        )
+    end
+    cursor:close()
+end
+
 local function commit(home, reason)
     lfs.chdir(home)
     os.execute("git add --all")
@@ -309,10 +380,14 @@ local function commit(home, reason)
 end
 
 return {
-    add    = add,
-    modify = modify,
-    delete = delete,
-    list   = prettyList,
-    view   = view,
-    commit = commit
+    add             = add,
+    modify          = modify,
+    delete          = delete,
+    list            = prettyList,
+    view            = view,
+    commit          = commit,
+    addAttribute    = addAttribute,
+    deleteAttribute = deleteAttribute,
+    modifyAttribute = modifyAttribute,
+    listAttributes  = listAttributes,
 }

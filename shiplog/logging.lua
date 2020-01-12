@@ -1,4 +1,5 @@
 local colors = require "term.colors"
+local utils = require "shiplog.utils"
 
 local log = function(level, message, ...)
     level = level or "info"
@@ -19,12 +20,12 @@ local log = function(level, message, ...)
 
     message = (type(message) == "string"
         and color(message)
-        or debug.dump(message))
+        or utils.dump(message))
             .. "\t"
 
     for _, variable in ipairs(variables) do
         message = message
-            .. debug.dump(variable)
+            .. utils.dump(variable)
             .. "\t"
     end
 

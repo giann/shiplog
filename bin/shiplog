@@ -143,10 +143,6 @@ listCommand
     :args(1)
 
 listCommand
-    :flag "--short -s"
-    :description "Short entries (date and title)"
-
-listCommand
     :option "--before -b"
     :description "Only show entry created before this date"
     :args(1)
@@ -164,6 +160,48 @@ gitCommand:description "Forward git commands to shiplog's repository"
 gitCommand:argument "git-command-args"
     :description "Git command arguments"
     :args "+"
+
+-- Attributes
+
+local attributeCommand = parser:command "attribute attr at"
+attributeCommand:description "Manage attributes"
+attributeCommand:command_target("attrCommand")
+
+local addAttributeCommand = attributeCommand:command "add a"
+addAttributeCommand:description "Add new attribute"
+
+addAttributeCommand:argument "name"
+    :description "Attribute's name"
+    :args(1)
+
+addAttributeCommand:argument "type"
+    :description "Attribute's type (one of: 'string', 'number', 'boolean'"
+    :args(1)
+
+local modifyAttributeCommand = attributeCommand:command "modify mod m"
+modifyAttributeCommand:description "Modify an attribute"
+
+modifyAttributeCommand:argument "id"
+    :description "Attribute's id"
+    :args(1)
+
+modifyAttributeCommand:argument "name"
+    :description "Attribute's name"
+    :args(1)
+
+modifyAttributeCommand:argument "type"
+    :description "Attribute's type (one of: 'string', 'number', 'boolean'"
+    :args(1)
+
+local deleteAttributeCommand = attributeCommand:command "delete del d"
+deleteAttributeCommand:description "Delete an attribute"
+
+deleteAttributeCommand:argument "id"
+    :description "Attribute's id"
+    :args(1)
+
+local listAttributeCommand = attributeCommand:command "list ls l"
+listAttributeCommand:description "List available attributes"
 
 local home = config.home -- args.dir or config.home
 local db =  home .. "/log.db"
@@ -253,7 +291,38 @@ else
 
     local conn = assert(env:connect(db), "Could not connect to knowledge db")
 
-    if args.command == "add" then
+    if args.command == "attribute" then
+        if args.attrCommand == "add" then
+            local ok, errOrId = shiplog.addAttribute(conn, args.name, args.type)
+
+            if not ok then
+                log.failure("Could not create attribute: " .. errOrId)
+            else
+                shiplog.commit(home, "Attribute #" .. errOrId .. " created")
+                log.success("Attribute " .. colors.blue("#" .. errOrId) .. colors.green(" created"))
+            end
+        elseif args.attrCommand == "delete" then
+            local ok, err = shiplog.deleteAttribute(conn, args.id)
+
+            if not ok then
+                log.failure(err)
+            else
+                shiplog.commit(home, "Attribute #" .. args.id .. " deleted")
+                log.success("Attribute deleted")
+            end
+        elseif args.attrCommand == "modify" then
+            local ok, err = shiplog.modifyAttribute(conn, args.id, args.name, args.type)
+
+            if not ok then
+                log.failure(err)
+            else
+                shiplog.commit(home, "Attribute #" .. args.id .. " modified")
+                log.success("Attribute modified")
+            end
+        elseif args.attrCommand == "list" then
+            shiplog.listAttributes(conn)
+        end
+    elseif args.command == "add" then
         local entry = getEntry(args)
 
         if entry then
