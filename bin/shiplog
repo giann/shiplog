@@ -165,10 +165,8 @@ if arg[1] == "git" then
     local command = "git"
     local count = #arg
     for i = 2, count do
-        command = command .. " " .. arg[i]
+        command = command .. " " .. (arg[i]:gsub("%s", "\\ "))
     end
-
-    utils.dump(arg)
 
     os.execute(command)
 
