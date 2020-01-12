@@ -1,5 +1,5 @@
 # ⚓ Shiplog
-A journal keeping cli tool
+A very simple journal keeping cli tool
 
 <p align="center">
     <img src="https://raw.githubusercontent.com/giann/shiplog/master/screen.png" alt="Shiplog">

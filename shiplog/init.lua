@@ -167,6 +167,10 @@ local function list(conn, filter, limit, before)
             and "'" .. table.concat(filter.tags, "', '") .. "'"
             or nil
 
+    local contentCondition = (filter.content and filter.content:len() > 0)
+        and " entries.content like '%" .. conn:escape(filter.content) .. "%'"
+        or ""
+
     local tagsCondition = tags
         and " entries_tags.entry_id = entries.rowid "
             .. " and tag in (" .. tags .. ") "
@@ -180,11 +184,16 @@ local function list(conn, filter, limit, before)
         beforeCondition = " and" .. beforeCondition
     end
 
+    if (tagsCondition:len() > 0 or beforeCondition:len() > 0) and contentCondition:len() > 0 then
+        contentCondition = " and" .. contentCondition
+    end
+
     local statement = "select distinct entries.rowid as id, created_at, updated_at, content, location "
         .. "from entries_tags, entries "
-        .. ((tagsCondition:len() > 0 or beforeCondition:len() > 0) and " where " or "")
+        .. ((tagsCondition:len() > 0 or beforeCondition:len() > 0 or contentCondition:len() > 0) and " where " or "")
         .. tagsCondition
         .. beforeCondition
+        .. contentCondition
         -- TODO: attr
         .. "limit " .. conn:escape(limit)
 
