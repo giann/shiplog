@@ -1,3 +1,3 @@
 return {
-    db = "./log.db",
+    home = os.getenv("HOME") .. "/.shiplog",
 }

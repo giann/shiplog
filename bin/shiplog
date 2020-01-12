@@ -6,10 +6,10 @@ local log      = require "shiplog.logging"
 local config   = require "shiplog.config"
 local shiplog  = require "shiplog"
 local term     = require "term"
+local lfs      = require "lfs"
 local colors   = term.colors
 
 local env = require "luasql.sqlite3".sqlite3()
-local conn = assert(env:connect(config.db), "Could not connect to knowledge db")
 
 local function parseEntryFilter(entry)
     local tags = {}
@@ -86,6 +86,12 @@ local parser = argparse()
     :description "⚓ A journal keeping cli tool"
     :command_target("command")
 
+parser:option "--dir -d"
+    :description("Specify shiplog's directory (default is `" .. config.home .. "`")
+
+local initCommand = parser:command "init i"
+    :description "Init shiplog database and git repository"
+
 local addCommand = parser:command "add a"
 addCommand:description "Write a log entry"
 
@@ -150,52 +156,125 @@ viewCommand:argument "id"
 
 local args = parser:parse()
 
-if args.command == "add" then
-    local entry = getEntry(args)
+local home = args.dir or config.home
+local db =  home .. "/log.db"
 
-    if entry then
-        local ok, errOrId = shiplog.add(conn, parseEntryFilter(entry))
+if args.command == "init" then
+    local ok, err = lfs.mkdir(home)
 
-        if not ok then
-            log.failure("Could not create entry: " .. errOrId)
-        else
-            log.success("Entry " .. colors.blue("#" .. errOrId) .. colors.green(" created"))
-        end
-    else
-        log.failure "Missing entry"
+    if not ok then
+        log.failure("Could not initialize shiplog: `" .. err .. "`")
+
+        os.exit(1)
     end
-elseif args.command == "modify" then
-    local entry = getEntry(args)
 
-    if entry then
-        local ok, err = shiplog.modify(conn, args.id, parseEntryFilter(entry))
+    -- touch
+    ok, err = io.open(db, "w")
+
+    if not ok then
+        log.failure("Could not initialize shiplog: `" .. err .. "`")
+
+        os.exit(1)
+    end
+
+    ok:close()
+
+    log.success("Database created at `".. db .. "`")
+
+    -- Init db
+    -- TODO: find more elegant way to do this
+    ok, err = os.execute("sqlite3 \"" .. db .. [[" "create table entries (
+            rowid integer not null primary key,
+            created_at timestamp default current_timestamp not null,
+            updated_at timestamp,
+            content text not null,
+            location text
+        );
+
+        create table entries_tags (
+            entry_id integer not null, 
+            tag text not null,
+            foreign key(entry_id) references entries(rowid),
+            primary key(entry_id, tag)
+        );"
+    ]])
+
+    if not ok then
+        log.failure("Could not initialize shiplog: `" .. err .. "`")
+
+        os.exit(1)
+    end
+
+    log.success("Database initialized")
+
+    -- Init repo
+    lfs.chdir(home)
+
+    ok, err = os.execute("git init")
+
+    if not ok then
+        log.failure("Could not initialize shiplog: `" .. err .. "`")
+
+        os.exit(1)
+    end
+
+    log.success("Git repository intialized at `" .. home .. "`")
+else
+    if not lfs.attributes(db) then
+        log.warning("Shiplog appears to not be initialized yet. Pleas run `shiplog init`")
+
+        os.exit(1)
+    end
+
+    local conn = assert(env:connect(db), "Could not connect to knowledge db")
+
+    if args.command == "add" then
+        local entry = getEntry(args)
+
+        if entry then
+            local ok, errOrId = shiplog.add(conn, parseEntryFilter(entry))
+
+            if not ok then
+                log.failure("Could not create entry: " .. errOrId)
+            else
+                log.success("Entry " .. colors.blue("#" .. errOrId) .. colors.green(" created"))
+            end
+        else
+            log.failure "Missing entry"
+        end
+    elseif args.command == "modify" then
+        local entry = getEntry(args)
+
+        if entry then
+            local ok, err = shiplog.modify(conn, args.id, parseEntryFilter(entry))
+
+            if not ok then
+                log.failure(err)
+            else
+                log.success("Entry modified")
+            end
+        else
+            log.failure "Missing entry"
+        end
+    elseif args.command == "delete" then
+        local ok, err = shiplog.delete(conn, args.id)
 
         if not ok then
             log.failure(err)
         else
-            log.success("Entry modified")
+            log.success("Entry deleted")
         end
-    else
-        log.failure "Missing entry"
+    elseif args.command == "list" then
+        -- TODO: table with criteria
+        shiplog.list(
+            conn,
+            parseEntryFilter(getEntry(args, true)),
+            args.limit,
+            args.before
+        )
+    elseif args.command == "view" then
+        shiplog.view(conn, args.id)
     end
-elseif args.command == "delete" then
-    local ok, err = shiplog.delete(conn, args.id)
 
-    if not ok then
-        log.failure(err)
-    else
-        log.success("Entry deleted")
-    end
-elseif args.command == "list" then
-    -- TODO: table with criteria
-    shiplog.list(
-        conn,
-        parseEntryFilter(getEntry(args, true)),
-        args.limit,
-        args.before
-    )
-elseif args.command == "view" then
-    shiplog.view(conn, args.id)
+    conn:close()
 end
-
-conn:close()

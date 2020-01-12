@@ -34,4 +34,5 @@ dependencies = {
     "argparse >= 0.6.0-1",
     "lua-term >= 0.7-1",
     "luasql-sqlite3 >= 2.4.0-1",
+    "luafilesystem >= 1.7.0-2"
 }

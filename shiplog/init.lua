@@ -26,8 +26,8 @@ end
 -- TODO: handle non-true-color terminals
 local function coloredTag(tag)
     local a = ("a"):byte(1)
-    local r = math.floor(((tag:lower():byte(2) - a) / 26) * 255)
-    local g = math.floor(((tag:lower():byte(3) - a) / 26) * 255)
+    local g = math.floor(((tag:lower():byte(2) - a) / 26) * 255)
+    local r = math.floor(((tag:lower():byte(3) - a) / 26) * 255)
     local b = math.floor(((tag:lower():byte(4) - a) / 26) * 255)
 
     return "\27[38;2;" .. r .. ";" .. g .. ";" .. b .. "m" .. tag .. "\27[0m"
