@@ -1,6 +1,7 @@
 local utils  = require "shiplog.utils"
 local colors = require "term".colors
 local log    = require "shiplog.logging"
+local lfs    = require "lfs"
 
 local function rows(connection, statement)
     local cursor = assert(
@@ -292,7 +293,8 @@ local function view(conn, id)
     end
 end
 
-local function commit(reason)
+local function commit(home, reason)
+    lfs.chdir(home)
     os.execute("git add --all")
     os.execute("git commit -m \"" .. reason .. "\"")
 end

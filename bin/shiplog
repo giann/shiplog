@@ -155,7 +155,7 @@ viewCommand:argument "id"
     :description "Entry ID"
     :args(1)
 
-local gitCommand = parser:command "git g"
+local gitCommand = parser:command "git"
 gitCommand:description "Forward git commands to shiplog's repository"
 
 gitCommand:argument "git-command-args"
@@ -259,7 +259,7 @@ else
             if not ok then
                 log.failure("Could not create entry: " .. errOrId)
             else
-                shiplog.commit("Entry #" .. errOrId .. " created")
+                shiplog.commit(home, "Entry #" .. errOrId .. " created")
                 log.success("Entry " .. colors.blue("#" .. errOrId) .. colors.green(" created"))
             end
         else
@@ -274,7 +274,7 @@ else
             if not ok then
                 log.failure(err)
             else
-                shiplog.commit("Entry #" .. args.id .. " modified")
+                shiplog.commit(home, "Entry #" .. args.id .. " modified")
                 log.success("Entry modified")
             end
         else
@@ -286,7 +286,7 @@ else
         if not ok then
             log.failure(err)
         else
-            shiplog.commit("Entry #" .. args.id .. " deleted")
+            shiplog.commit(home, "Entry #" .. args.id .. " deleted")
             log.success("Entry deleted")
         end
     elseif args.command == "list" then
