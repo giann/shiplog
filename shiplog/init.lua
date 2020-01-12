@@ -59,8 +59,8 @@ local function add(conn, entry)
         assert(tag:len() >= 3, "Tag must be at least 3 characters long")
 
         statement =
-            "replace into entries_tags (entry_id, tag) values ('"
-                .. id .. "',"
+            "replace into entries_tags (entry_id, tag) values ("
+                .. id .. ","
                 .. "'" .. conn:escape(tag) .. "'"
             .. ")"
 
@@ -78,7 +78,7 @@ local function modify(conn, id, entry)
     -- Check for entry existence
     local exist = false
     local it, cur =
-        rows(conn, "select count(*) from entries where rowid = '" .. conn:escape(id) .. "'")
+        rows(conn, "select count(*) from entries where rowid = " .. conn:escape(id))
     for count in it do
         if count > 0 then
             exist = true
@@ -95,7 +95,7 @@ local function modify(conn, id, entry)
     if entry.content and entry.content:len() > 0 then
         if conn:execute(
             "update entries set content = '" .. conn:escape(entry.content) .. "' "
-            .. "where entries.rowid = '" .. conn:escape(id) .. "'"
+            .. "where entries.rowid = " .. conn:escape(id)
         ) == 0 then
             return false, "Could not modify entry with id `" .. id .. "`"
         end
@@ -119,8 +119,8 @@ local function modify(conn, id, entry)
 
     for _, tag in ipairs(entry.excludedTags) do
         if conn:execute(
-            "delete from entries_tags where entry_id = '" .. conn:escape(id) .. "' "
-            .. " and entry.tag = '" .. tag .. "'"
+            "delete from entries_tags where entry_id = " .. conn:escape(id) .. " "
+            .. " and tag = '" .. tag .. "'"
         ) == 0 then
             return false, "Could not modify entry with id `" .. id .. "`"
         end
@@ -132,8 +132,8 @@ end
 local function delete(conn, id)
     id = conn:escape(id)
 
-    local affected = conn:execute("delete from entries where rowid = '" .. id .. "';")
-    affected = affected + conn:execute("delete from entries_tags where rowid = '" .. id .. "';")
+    local affected = conn:execute("delete from entries where rowid = " .. id .. ";")
+    affected = affected + conn:execute("delete from entries_tags where entry_id = " .. id .. ";")
 
     return affected and affected > 0,
         (not affected or affected == 0) and "Could not modify entry with id `" .. id .. "`"
@@ -202,7 +202,7 @@ local function list(conn, filter, limit, before)
 
         local excluded = false
         local iterator2, cursor2 =
-            rows(conn, "select tag from entries_tags where entry_id = '" .. id .. "'")
+            rows(conn, "select tag from entries_tags where entry_id = " .. id .. "")
         for tag in iterator2 do
             table.insert(entry.entryTags, tag)
 
@@ -256,7 +256,7 @@ local function view(conn, id)
         conn,
         "select created_at, updated_at, content, location "
         .. "from entries "
-        .. "where rowid = '" .. conn:escape(id) .. "'"
+        .. "where rowid = " .. conn:escape(id)
     )
     cursor:close()
 
@@ -271,7 +271,7 @@ local function view(conn, id)
     local tags = {}
 
     local it, cur =
-        rows(conn, "select tag from entries_tags where entry_id = '" .. id .. "'")
+        rows(conn, "select tag from entries_tags where entry_id = " .. id .. "")
     for tag in it do
         table.insert(tags, coloredTag("+" .. tag))
     end
