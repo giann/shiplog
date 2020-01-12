@@ -98,7 +98,7 @@ addCommand:description "Write a log entry"
 
 addCommand
     :argument "entry"
-    :description "The entry"
+    :description "The entry. Any word prefixed by `+` will be added as a tag."
     :args "*" -- If not given, should come from stdin
 
 addCommand:option "--file -f"
@@ -115,7 +115,10 @@ modifyCommand
 
 modifyCommand
     :argument "entry"
-    :description "Modifications"
+    :description(
+        "Modifications. Any word prefixed by `+` will be added as a tag."
+        .. " Any word prefixed by `:` will be considered a tag to be deleted."
+    )
     :args "*"
 
 local deleteCommand = parser:command "delete del d"
@@ -131,7 +134,7 @@ listCommand:description "List log entries"
 
 listCommand
     :argument "filter"
-    :description "Filter entries"
+    :description "Filter entries. You can filter in or out tags by prefixing the tag name by `+` or `:` respectively."
     :args "*"
 
 listCommand

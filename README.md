@@ -25,6 +25,8 @@ luarocks install shiplog
 - `view`, `v`: View an entry
 - `git`: Forward git commands to shiplog's repository
 
+You can have a detailed help for each command with the `--help` option.
+
 ## Features
 
 - [X] Write log entries
