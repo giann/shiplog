@@ -89,7 +89,7 @@ local parser = argparse()
 parser:option "--dir -d"
     :description("Specify shiplog's directory (default is `" .. config.home .. "`")
 
-local initCommand = parser:command "init i"
+parser:command "init i"
     :description "Init shiplog database and git repository"
 
 local addCommand = parser:command "add a"
@@ -153,6 +153,27 @@ viewCommand:description "View an entry"
 viewCommand:argument "id"
     :description "Entry ID"
     :args(1)
+
+local gitCommand = parser:command "git g"
+gitCommand:description "Forward git commands to shiplog's repository"
+
+gitCommand:argument "git-command-args"
+    :description "Git command arguments"
+    :args "+"
+
+if arg[1] == "git" then
+    local command = "git"
+    local count = #arg
+    for i = 2, count do
+        command = command .. " " .. arg[i]
+    end
+
+    utils.dump(arg)
+
+    os.execute(command)
+
+    os.exit()
+end
 
 local args = parser:parse()
 
@@ -237,6 +258,7 @@ else
             if not ok then
                 log.failure("Could not create entry: " .. errOrId)
             else
+                shiplog.commit("Entry #" .. errOrId .. " created")
                 log.success("Entry " .. colors.blue("#" .. errOrId) .. colors.green(" created"))
             end
         else
@@ -251,6 +273,7 @@ else
             if not ok then
                 log.failure(err)
             else
+                shiplog.commit("Entry #" .. args.id .. " modified")
                 log.success("Entry modified")
             end
         else
@@ -262,6 +285,7 @@ else
         if not ok then
             log.failure(err)
         else
+            shiplog.commit("Entry #" .. args.id .. " deleted")
             log.success("Entry deleted")
         end
     elseif args.command == "list" then

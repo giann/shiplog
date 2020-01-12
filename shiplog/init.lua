@@ -292,10 +292,16 @@ local function view(conn, id)
     end
 end
 
+local function commit(reason)
+    os.execute("git add --all")
+    os.execute("git commit -m \"" .. reason .. "\"")
+end
+
 return {
     add    = add,
     modify = modify,
     delete = delete,
     list   = prettyList,
-    view   = view
+    view   = view,
+    commit = commit
 }
