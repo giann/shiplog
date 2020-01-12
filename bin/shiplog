@@ -86,8 +86,9 @@ local parser = argparse()
     :description "⚓ A journal keeping cli tool"
     :command_target("command")
 
-parser:option "--dir -d"
-    :description("Specify shiplog's directory (default is `" .. config.home .. "`")
+-- TODO
+-- parser:option "--dir -d"
+--     :description("Specify shiplog's directory (default is `" .. config.home .. "`")
 
 parser:command "init i"
     :description "Init shiplog database and git repository"
@@ -161,6 +162,9 @@ gitCommand:argument "git-command-args"
     :description "Git command arguments"
     :args "+"
 
+local home = config.home -- args.dir or config.home
+local db =  home .. "/log.db"
+
 if arg[1] == "git" then
     local command = "git"
     local count = #arg
@@ -168,15 +172,14 @@ if arg[1] == "git" then
         command = command .. " " .. (arg[i]:gsub("%s", "\\ "))
     end
 
+    lfs.chdir(home)
+
     os.execute(command)
 
     os.exit()
 end
 
 local args = parser:parse()
-
-local home = args.dir or config.home
-local db =  home .. "/log.db"
 
 if args.command == "init" then
     local ok, err = lfs.mkdir(home)
