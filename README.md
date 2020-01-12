@@ -5,6 +5,26 @@ A journal keeping cli tool
     <img src="https://raw.githubusercontent.com/giann/shiplog/master/screen.png" alt="Shiplog">
 </p>
 
+## Installation
+
+```bash
+luarocks install shiplog
+```
+
+## Usage
+
+### Options:
+- `-h`, `--help`: Show this help message and exit.
+
+### Commands:
+- `init`, `i`: Init shiplog database and git repository
+- `add`, `a`: Write a log entry
+- `modify`, `mod`, `m`: Modify a log entry
+- `delete`, `del`, `d`: Delete an entry
+- `list`, `ls`, `l`: List log entries
+- `view`, `v`: View an entry
+- `git`: Forward git commands to shiplog's repository
+
 ## Features
 
 - [X] Write log entries
