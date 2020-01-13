@@ -2,6 +2,7 @@ local utils  = require "shiplog.utils"
 local colors = require "term".colors
 local log    = require "shiplog.logging"
 local lfs    = require "lfs"
+local term   = require "term"
 
 local function rows(connection, statement)
     local cursor = assert(
@@ -32,6 +33,81 @@ local function coloredTag(tag)
     local b = math.floor(((tag:lower():byte(4) - a) / 26) * 255)
 
     return "\27[38;2;" .. r .. ";" .. g .. ";" .. b .. "m" .. tag .. "\27[0m"
+end
+
+local function parseEntryFilter(entry)
+    local tags = {}
+    local excludedTags = {}
+    local attributes = {}
+    local excludedAttributes = {}
+    local content = ""
+
+    for _, line in ipairs(utils.split(entry, "\n")) do
+        for _, word in ipairs(utils.split(line, " ")) do
+            local trimmed = utils.trim(word)
+            local prefix = trimmed:sub(1, 1)
+
+            if prefix == "+" then
+                table.insert(tags, trimmed:sub(2))
+            -- TODO: find a way for argparse to let us use '-'
+            elseif prefix == ":" then
+                table.insert(excludedTags, trimmed:sub(2))
+            else
+                local key, value = trimmed:match("^([^=]+)=([^%s]*)")
+
+                if key then
+                    if value and value:len() > 0 then
+                        attributes[key] = value
+                    else
+                        table.insert(excludedAttributes, key)
+                    end
+                else
+                    content = content .. word .. " "
+                end
+            end
+        end
+        content = content .. "\n"
+    end
+
+    content = utils.trim(content)
+
+    return {
+        content = content,
+        tags = tags,
+        excludedTags = excludedTags,
+        attributes = attributes,
+        excludedAttributes = excludedAttributes
+    }
+end
+
+local function getEntry(args, canBeEmpty)
+    local entry = args.entry or args.filter
+
+    -- Get entry from file
+    if args.file then
+        entry = utils.fileToString(args.file)
+    elseif not entry or #entry == 0 and not canBeEmpty then
+        if not term.isatty(io.stdin) then
+            -- Get entry from stdin
+            entry = io.stdin:read("a")
+        else
+            -- Get entry from editor
+            local tmpFile = os.tmpname()
+
+            -- Open tmp file with default editor
+            if os.execute("$EDITOR " .. tmpFile) then
+                -- Read tmp file
+                entry = utils.fileToString(tmpFile)
+
+                -- Remove tmp file
+                os.remove(tmpFile)
+            end
+        end
+    else
+        entry = table.concat(entry, " ")
+    end
+
+    return entry and entry:len() > 0 and entry or (canBeEmpty and "" or nil)
 end
 
 local function add(conn, entry)
@@ -71,6 +147,40 @@ local function add(conn, entry)
         end
     end
 
+    for key, value in pairs(entry.attributes) do
+        assert(key:len() >= 3, "Attribute must be at least 3 characters long")
+        assert(value:len() > 0, "Key must have a value")
+
+        local attrId, attrType
+        cur, attrId, attrType = first_row(
+            conn,
+            "select rowid, type from attributes where name = '" .. conn:escape(key) .. "'"
+        )
+        cur:close()
+
+        assert(attrType and attrId, "Attribute `" .. conn:escape(key) .. "` does not exist")
+
+        if attrType == "number" then
+            value = tonumber(value)
+
+            assert(value, "Attribute value must be valid number")
+        elseif attrType == "boolean" then
+            value = value and true or false
+        end
+
+        statement = "replace into entries_attributes (entry_id, attribute_id, value) values ("
+            .. id .. ", "
+            .. attrId .. ", "
+            .. value
+            .. ")"
+
+        ok, err = conn:execute(statement)
+
+        if not ok then
+            return ok, err
+        end
+    end
+
     return true, id
 end
 
@@ -91,7 +201,6 @@ local function modify(conn, id, entry)
         return false, "Could not find entry with id `" .. id .. "`"
     end
 
-    -- TODO: attributes
     if entry.content and entry.content:len() > 0 then
         if conn:execute(
             "update entries set content = '" .. conn:escape(entry.content) .. "' "
@@ -126,6 +235,56 @@ local function modify(conn, id, entry)
         end
     end
 
+    for name, value in pairs(entry.attributes) do
+        assert(name:len() >= 3, "Attribute must be at least 3 characters long")
+        assert(value:len() > 0, "Key must have a value")
+
+        local attrId, attrType
+        cur, attrId, attrType = first_row(
+            conn,
+            "select rowid, type from attributes where name = '" .. conn:escape(name) .. "'"
+        )
+        cur:close()
+
+        assert(attrType and attrId, "Attribute `" .. conn:escape(name) .. "` does not exist")
+
+        if attrType == "number" then
+            value = tonumber(value)
+
+            assert(value, "Attribute value must be valid number")
+        elseif attrType == "boolean" then
+            value = value and true or false
+        end
+
+        local statement = "replace into entries_attributes (entry_id, attribute_id, value) values ("
+            .. id .. ", "
+            .. attrId .. ", "
+            .. value
+            .. ")"
+
+        local ok, err = conn:execute(statement)
+
+        if not ok then
+            return ok, err
+        end
+    end
+
+    for _, name in ipairs(entry.excludedAttributes) do
+        local attrId
+        cur, attrId = first_row(
+            conn,
+            "select rowid from attributes where name = '" .. conn:escape(name) .. "'"
+        )
+        cur:close()
+
+        if not attrId or conn:execute(
+            "delete from entries_attributes where entry_id = " .. conn:escape(id) .. " "
+            .. " and attribute_id = " .. attrId
+        ) == 0 then
+            return false, "Could not modify entry with id `" .. id .. "`"
+        end
+    end
+
     return true
 end
 
@@ -134,6 +293,7 @@ local function delete(conn, id)
 
     local affected = conn:execute("delete from entries where rowid = " .. id)
     affected = affected + conn:execute("delete from entries_tags where entry_id = " .. id)
+    affected = affected + conn:execute("delete from entries_attributes where entry_id = " .. id)
 
     return affected and affected > 0,
         (not affected or affected == 0) and "Could not delete entry with id `" .. id .. "`"
@@ -286,6 +446,22 @@ local function view(conn, id)
     end
     cur:close()
 
+    local attributes = {}
+
+    it, cur =
+        rows(
+            conn,
+            "select attributes.name, entries_attributes.value "
+            .. "from entries, entries_attributes, attributes "
+            .. "where entries.rowid = " .. id
+            .. "  and entries_attributes.entry_id = entries.rowid"
+            .. "  and entries_attributes.attribute_id = attributes.rowid"
+        )
+    for name, value in it do
+        table.insert(attributes, colors.blue(name .. ": ") .. value)
+    end
+    cur:close()
+
     print(
         "\n"
         .. colors.cyan("#" .. id .. " ")
@@ -293,6 +469,8 @@ local function view(conn, id)
         .. "\n"
         .. colors.dim(updatedAt or createdAt) .. " "
         .. table.concat(tags, " ")
+        .. "\n"
+        .. table.concat(attributes, "\n")
     )
 
     local body = utils.trim(content:sub(line:len() + 1))
@@ -380,14 +558,16 @@ local function commit(home, reason)
 end
 
 return {
-    add             = add,
-    modify          = modify,
-    delete          = delete,
-    list            = prettyList,
-    view            = view,
-    commit          = commit,
-    addAttribute    = addAttribute,
-    deleteAttribute = deleteAttribute,
-    modifyAttribute = modifyAttribute,
-    listAttributes  = listAttributes,
+    add              = add,
+    modify           = modify,
+    delete           = delete,
+    list             = prettyList,
+    view             = view,
+    commit           = commit,
+    addAttribute     = addAttribute,
+    deleteAttribute  = deleteAttribute,
+    modifyAttribute  = modifyAttribute,
+    listAttributes   = listAttributes,
+    parseEntryFilter = parseEntryFilter,
+    getEntry         = getEntry,
 }

@@ -32,14 +32,12 @@ You can have a detailed help for each command with the `--help` option.
 - [X] Write log entries
 - [X] Tag entries
 - [ ] Interactive mode with sirocco
-- [ ] Add location and other attributes to entries
+- [X] User defined attributes
 - [ ] Filter entries
     + [X] by tags
     + [ ] by attributes
-    + [ ] by location
 - [ ] [Encrypt/Decrypt entries with gpg key](https://www.sqlite.org/see/doc/release/www/readme.wiki)
 - [X] Sync over git repository
-- [ ] User defined attributes
 
 ## Requirements
 

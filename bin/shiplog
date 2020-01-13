@@ -1,84 +1,16 @@
 #!/usr/bin/env lua
 
-local argparse = require "argparse"
-local utils    = require "shiplog.utils"
-local log      = require "shiplog.logging"
-local config   = require "shiplog.config"
-local shiplog  = require "shiplog"
-local term     = require "term"
-local lfs      = require "lfs"
-local colors   = term.colors
+local argparse         = require "argparse"
+local log              = require "shiplog.logging"
+local config           = require "shiplog.config"
+local shiplog          = require "shiplog"
+local term             = require "term"
+local lfs              = require "lfs"
+local colors           = term.colors
+local parseEntryFilter = shiplog.parseEntryFilter
+local getEntry         = shiplog.getEntry
 
 local env = require "luasql.sqlite3".sqlite3()
-
-local function parseEntryFilter(entry)
-    local tags = {}
-    local excludedTags = {}
-    local attributes = {}
-    local content = ""
-
-    for _, line in ipairs(utils.split(entry, "\n")) do
-        for _, word in ipairs(utils.split(line, " ")) do
-            local trimmed = utils.trim(word)
-            local prefix = trimmed:sub(1, 1)
-
-            if prefix == "+" then
-                table.insert(tags, trimmed:sub(2))
-            -- TODO: find a way for argparse to let us use '-'
-            elseif prefix == ":" then
-                table.insert(excludedTags, trimmed:sub(2))
-            else
-                local key, value = trimmed:match("^([^:]+):(.*)")
-
-                if key and value then
-                    attributes[key] = value
-                else
-                    content = content .. word .. " "
-                end
-            end
-        end
-        content = content .. "\n"
-    end
-
-    content = utils.trim(content)
-
-    return {
-        content = content,
-        tags = tags,
-        excludedTags = excludedTags,
-        attributes = attributes,
-    }
-end
-
-local function getEntry(args, canBeEmpty)
-    local entry = args.entry or args.filter
-
-    -- Get entry from file
-    if args.file then
-        entry = utils.fileToString(args.file)
-    elseif not entry or #entry == 0 and not canBeEmpty then
-        if not term.isatty(io.stdin) then
-            -- Get entry from stdin
-            entry = io.stdin:read("a")
-        else
-            -- Get entry from editor
-            local tmpFile = os.tmpname()
-
-            -- Open tmp file with default editor
-            if os.execute("$EDITOR " .. tmpFile) then
-                -- Read tmp file
-                entry = utils.fileToString(tmpFile)
-
-                -- Remove tmp file
-                os.remove(tmpFile)
-            end
-        end
-    else
-        entry = table.concat(entry, " ")
-    end
-
-    return entry and entry:len() > 0 and entry or (canBeEmpty and "" or nil)
-end
 
 -- Parse command line
 local parser = argparse()
@@ -259,6 +191,21 @@ if args.command == "init" then
             tag text not null,
             foreign key(entry_id) references entries(rowid),
             primary key(entry_id, tag)
+        );
+
+        create table attributes (
+            rowid integer not null primary key,
+            name text not null unique,
+            type text not null
+        );
+
+        create table entries_attributes (
+            entry_id integer not null, 
+            attribute_id integer not null,
+            value text not null,
+            foreign key(entry_id) references entries(rowid),
+            foreign key(attribute_id) references attributes(rowid),
+            primary key(entry_id, attribute_id)
         );"
     ]])
 
