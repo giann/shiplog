@@ -259,7 +259,7 @@ local function modify(conn, id, entry)
         local statement = "replace into entries_attributes (entry_id, attribute_id, value) values ("
             .. id .. ", "
             .. attrId .. ", "
-            .. value
+            .. "'" .. conn:escape(value) .. "'"
             .. ")"
 
         local ok, err = conn:execute(statement)
