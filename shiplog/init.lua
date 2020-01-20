@@ -397,7 +397,7 @@ local function list(conn, filter, limit, before)
     return result
 end
 
-local function prettyList(conn, filter, limit, before)
+local function prettyList(conn, filter, limit, before, short)
     local results = list(conn, filter, limit, before)
 
     for _, entry in pairs(results) do
@@ -409,14 +409,23 @@ local function prettyList(conn, filter, limit, before)
             tags[i] = coloredTag("+" .. tag)
         end
 
-        print(
-            "\n"
-            .. colors.cyan("#" .. entry.id .. " ")
-            .. colors.green(line)
-            .. "\n"
-            .. colors.dim(entry.updated_at or entry.created_at) .. " "
-            .. table.concat(tags, " ")
-        )
+        if short then
+            print(
+                colors.cyan("#" .. entry.id .. " ")
+                .. colors.green(line)
+                .. " "
+                .. table.concat(tags, " ")
+            )
+        else
+            print(
+                "\n"
+                .. colors.cyan("#" .. entry.id .. " ")
+                .. colors.green(line)
+                .. "\n"
+                .. colors.dim(entry.updated_at or entry.created_at) .. " "
+                .. table.concat(tags, " ")
+            )
+        end
     end
 end
 

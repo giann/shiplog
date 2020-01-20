@@ -79,6 +79,10 @@ listCommand
     :description "Only show entry created before this date"
     :args(1)
 
+listCommand
+    :flag "--short -s"
+    :description "Short list with only titles and IDs"
+
 local viewCommand = parser:command "view v"
 viewCommand:description "View an entry"
 
@@ -314,7 +318,8 @@ else
             conn,
             parseEntryFilter(getEntry(args, true)),
             args.limit,
-            args.before
+            args.before,
+            args.short
         )
     elseif args.command == "view" then
         shiplog.view(conn, args.id)
