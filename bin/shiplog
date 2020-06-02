@@ -274,7 +274,7 @@ else
             shiplog.listAttributes(conn)
         end
     elseif args.command == "add" then
-        local entry = getEntry(args)
+        local entry = getEntry(conn, args)
 
         if entry then
             local ok, errOrId = shiplog.add(conn, parseEntryFilter(entry))
@@ -289,7 +289,7 @@ else
             log.failure "Missing entry"
         end
     elseif args.command == "modify" then
-        local entry = getEntry(args)
+        local entry = getEntry(conn, args)
 
         if entry then
             local ok, err = shiplog.modify(conn, args.id, parseEntryFilter(entry))
@@ -316,7 +316,7 @@ else
         -- TODO: table with criteria
         shiplog.list(
             conn,
-            parseEntryFilter(getEntry(args, true)),
+            parseEntryFilter(getEntry(conn, args, true)),
             args.limit,
             args.before,
             args.short

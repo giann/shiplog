@@ -42,6 +42,7 @@ local function parseEntryFilter(entry)
     local excludedAttributes = {}
     local content = ""
 
+    -- TODO: replace stupid split by gmatch
     for _, line in ipairs(utils.split(entry, "\n")) do
         for _, word in ipairs(utils.split(line, " ")) do
             local trimmed = utils.trim(word)
@@ -80,7 +81,76 @@ local function parseEntryFilter(entry)
     }
 end
 
-local function getEntry(args, canBeEmpty)
+local function readEntry(conn, id)
+    local entry = {}
+
+    local cursor, createdAt, updatedAt, content, _ = first_row(
+        conn,
+        "select created_at, updated_at, content, location "
+        .. "from entries "
+        .. "where rowid = " .. conn:escape(id)
+    )
+    cursor:close()
+
+    if not content then
+        return
+    end
+
+    entry.content = content
+    entry.createdAt = createdAt
+    entry.updatedAt = updatedAt
+    entry.tags = {}
+
+    local it, cur =
+        rows(conn, "select tag from entries_tags where entry_id = " .. id .. "")
+    for tag in it do
+        table.insert(entry.tags, tag)
+    end
+    cur:close()
+
+    entry.attributes = {}
+
+    it, cur =
+        rows(
+            conn,
+            "select attributes.name, entries_attributes.value "
+            .. "from entries, entries_attributes, attributes "
+            .. "where entries.rowid = " .. id
+            .. "  and entries_attributes.entry_id = entries.rowid"
+            .. "  and entries_attributes.attribute_id = attributes.rowid"
+        )
+    for name, value in it do
+        entry.attributes[name] = value
+    end
+    cur:close()
+
+    return entry
+end
+
+-- Convert entry to its add command
+local function entryToCommand(conn, id)
+    local entry = readEntry(conn, id)
+
+    if not entry then
+        return
+    end
+
+    local cmd = ""
+
+    for key, value in pairs(entry.attributes) do
+        cmd = cmd .. key .. "=" .. value .. "\n"
+    end
+
+    for _, tag in ipairs(entry.tags) do
+        cmd = cmd .. "+" .. tag .. "\n"
+    end
+
+    cmd = cmd .. entry.content
+
+    return cmd
+end
+
+local function getEntry(conn, args, canBeEmpty)
     local entry = args.entry or args.filter
 
     -- Get entry from file
@@ -93,6 +163,21 @@ local function getEntry(args, canBeEmpty)
         else
             -- Get entry from editor
             local tmpFile = os.tmpname()
+
+            -- If id provide, write content of existing entry in the tmp file
+            if args.id then
+                local cmd = entryToCommand(conn, args.id)
+
+                if cmd and cmd:len() > 0 then
+                    local file, _ = io.open(tmpFile, "w")
+
+                    if file then
+                        file:write(cmd)
+
+                        file:close()
+                    end
+                end
+            end
 
             -- Open tmp file with default editor
             if os.execute("$EDITOR " .. tmpFile) then
@@ -430,59 +515,40 @@ local function prettyList(conn, filter, limit, before, short)
 end
 
 local function view(conn, id)
-    local cursor, createdAt, updatedAt, content, _ = first_row(
-        conn,
-        "select created_at, updated_at, content, location "
-        .. "from entries "
-        .. "where rowid = " .. conn:escape(id)
-    )
-    cursor:close()
+    local entry = readEntry(conn, id)
 
-    if not content then
+    if not entry then
         log.failure("Could not find entry with id `" .. id .. "`")
         return
     end
 
-    local line = (content:match("^([^\n]+)") or content)
+    local line = (entry.content:match("^([^\n]+)") or entry)
         :sub(1, 80)
 
     local tags = {}
 
-    local it, cur =
-        rows(conn, "select tag from entries_tags where entry_id = " .. id .. "")
-    for tag in it do
+    for _, tag in ipairs(entry.tags) do
         table.insert(tags, coloredTag("+" .. tag))
     end
-    cur:close()
 
     local attributes = {}
 
-    it, cur =
-        rows(
-            conn,
-            "select attributes.name, entries_attributes.value "
-            .. "from entries, entries_attributes, attributes "
-            .. "where entries.rowid = " .. id
-            .. "  and entries_attributes.entry_id = entries.rowid"
-            .. "  and entries_attributes.attribute_id = attributes.rowid"
-        )
-    for name, value in it do
+    for name, value in pairs(entry.attributes) do
         table.insert(attributes, colors.blue(name .. ": ") .. value)
     end
-    cur:close()
 
     print(
         "\n"
         .. colors.cyan("#" .. id .. " ")
         .. colors.green(line)
         .. "\n"
-        .. colors.dim(updatedAt or createdAt) .. " "
+        .. colors.dim(entry.updatedAt or entry.createdAt) .. " "
         .. table.concat(tags, " ")
         .. "\n"
         .. table.concat(attributes, "\n")
     )
 
-    local body = utils.trim(content:sub(line:len() + 1))
+    local body = utils.trim(entry.content:sub(line:len() + 1))
 
     if body:len() > 0 then
         print("\n" .. body)
